@@ -474,6 +474,7 @@ void psyqo::GPU::sendChain(eastl::function<void()> &&callback, DMA::DmaCallback 
 void psyqo::GPU::scheduleChainedDMA(uintptr_t head) {
     Kernel::assert((DMA_CTRL[DMA_GPU].CHCR & 0x01000000) == 0, "GPU DMA busy");
     while ((Hardware::GPU::Ctrl & uint32_t(0x10000000)) == 0);
+    Hardware::GPU::Ctrl = 0x04000002;
     DMA_CTRL[DMA_GPU].MADR = head;
     eastl::atomic_signal_fence(eastl::memory_order_release);
     DMA_CTRL[DMA_GPU].CHCR = 0x01000401;
