@@ -110,18 +110,18 @@ class ArchiveManager {
         constexpr bool await_ready() const { return false; }
         template <typename U>
         void await_suspend(std::coroutine_handle<U> handle) {
-            m_manager.readFile(m_entry, m_device, [handle, this](Buffer<uint8_t> &&data) {
+            m_manager.readFile(m_entry, m_device, [handle, this](eastl::vector<uint8_t> &&data) {
                 m_data = eastl::move(data);
                 handle.resume();
             });
         }
-        Buffer<uint8_t> await_resume() { return eastl::move(m_data); }
+        eastl::vector<uint8_t> await_resume() { return eastl::move(m_data); }
 
       private:
         const IndexEntry *m_entry;
         CDRom &m_device;
         ArchiveManager &m_manager;
-        Buffer<uint8_t> m_data;
+        eastl::vector<uint8_t> m_data;
     };
 
   public:
@@ -274,7 +274,7 @@ class ArchiveManager {
      *
      * @param buffer The buffer to be used for the next read operation.
      */
-    void setBuffer(Buffer<uint8_t> &&buffer) { m_data = eastl::move(buffer); }
+    void setBuffer(eastl::vector<uint8_t> &&buffer) { m_data = eastl::move(buffer); }
 
     /**
      * @brief Read a file from the archive.
@@ -287,19 +287,19 @@ class ArchiveManager {
      * string at compile time.
      */
     template <unsigned S>
-    void readFile(const char (&path)[S], CDRom &device, eastl::function<void(Buffer<uint8_t> &&)> &&callback) {
+    void readFile(const char (&path)[S], CDRom &device, eastl::function<void(eastl::vector<uint8_t> &&)> &&callback) {
         setupQueue(getIndexEntry(path), device, eastl::move(callback));
         m_queue.run();
     }
-    void readFile(eastl::string_view path, CDRom &device, eastl::function<void(Buffer<uint8_t> &&)> &&callback) {
+    void readFile(eastl::string_view path, CDRom &device, eastl::function<void(eastl::vector<uint8_t> &&)> &&callback) {
         setupQueue(getIndexEntry(path), device, eastl::move(callback));
         m_queue.run();
     }
-    void readFile(uint64_t hash, CDRom &device, eastl::function<void(Buffer<uint8_t> &&)> &&callback) {
+    void readFile(uint64_t hash, CDRom &device, eastl::function<void(eastl::vector<uint8_t> &&)> &&callback) {
         setupQueue(getIndexEntry(hash), device, eastl::move(callback));
         m_queue.run();
     }
-    void readFile(const IndexEntry *entry, CDRom &device, eastl::function<void(Buffer<uint8_t> &&)> &&callback) {
+    void readFile(const IndexEntry *entry, CDRom &device, eastl::function<void(eastl::vector<uint8_t> &&)> &&callback) {
         setupQueue(entry, device, eastl::move(callback));
         m_queue.run();
     }
@@ -364,10 +364,10 @@ class ArchiveManager {
 
   private:
     eastl::function<void(bool)> m_initCallback;
-    eastl::function<void(Buffer<uint8_t> &&)> m_callback;
+    eastl::function<void(eastl::vector<uint8_t> &&)> m_callback;
     psyqo::TaskQueue m_queueInitFilename;
     psyqo::TaskQueue m_queue;
-    Buffer<uint8_t> m_data;
+    eastl::vector<uint8_t> m_data;
     Buffer<IndexEntry> m_index;
     ISO9660Parser::DirEntry m_archiveDirentry;
     CDRom::ReadRequest m_request;
@@ -376,7 +376,7 @@ class ArchiveManager {
 
     void setupInitQueue(eastl::string_view archiveName, ISO9660Parser &parser, eastl::function<void(bool)> &&callback);
     void setupInitQueue(uint32_t LBA, CDRom &device, eastl::function<void(bool)> &&callback);
-    void setupQueue(const IndexEntry *entry, CDRom &device, eastl::function<void(Buffer<uint8_t> &&)> &&callback);
+    void setupQueue(const IndexEntry *entry, CDRom &device, eastl::function<void(eastl::vector<uint8_t> &&)> &&callback);
     uint32_t getIndexSectorCount() const {
         static_assert(sizeof(IndexEntry) == 16, "IndexEntry size is not 16 bytes");
         uint32_t indexSize = (getIndexCount() + 1) * sizeof(IndexEntry);

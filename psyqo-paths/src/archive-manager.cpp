@@ -32,11 +32,15 @@ SOFTWARE.
 #include "psyqo/utility-polyfill.h"
 #include "ucl-demo/n2e-d.h"
 
-eastl::array<void (psyqo::paths::ArchiveManager::*)(const psyqo::paths::ArchiveManager::IndexEntry*), 3>
+eastl::array<void (psyqo::paths::ArchiveManager::*)(
+                 const psyqo::paths::ArchiveManager::IndexEntry*),
+    3>
     psyqo::paths::ArchiveManager::s_decompressors = {nullptr};
 
-void psyqo::paths::ArchiveManager::setupInitQueue(eastl::string_view archiveName, ISO9660Parser& parser,
-                                                  eastl::function<void(bool)>&& callback) {
+void psyqo::paths::ArchiveManager::setupInitQueue(eastl::string_view archiveName,
+    ISO9660Parser& parser,
+    eastl::function<void(bool)>&& callback)
+{
     setupInitQueue(0, *parser.getCDRom(), eastl::move(callback));
     m_queueInitFilename.reset();
     m_queueInitFilename.startWith([](auto task) { task->resolve(); });
@@ -51,7 +55,10 @@ void psyqo::paths::ArchiveManager::setupInitQueue(eastl::string_view archiveName
         .then(m_queue.schedule());
 }
 
-void psyqo::paths::ArchiveManager::setupInitQueue(uint32_t LBA, CDRom& device, eastl::function<void(bool)>&& callback) {
+void psyqo::paths::ArchiveManager::setupInitQueue(uint32_t LBA,
+    CDRom& device,
+    eastl::function<void(bool)>&& callback)
+{
     Kernel::assert(!m_pending, "Only one action can be performed at a time");
     m_queue.reset();
     m_pending = true;
@@ -89,24 +96,29 @@ void psyqo::paths::ArchiveManager::setupInitQueue(uint32_t LBA, CDRom& device, e
 }
 
 const psyqo::paths::ArchiveManager::IndexEntry* psyqo::paths::ArchiveManager::getIndexEntry(
-    eastl::string_view path) const {
+    eastl::string_view path) const
+{
     uint64_t hash = djb::hash<uint64_t>(path.data(), path.size());
     return getIndexEntry(hash);
 }
 
-const psyqo::paths::ArchiveManager::IndexEntry* psyqo::paths::ArchiveManager::getIndexEntry(uint64_t hash) const {
+const psyqo::paths::ArchiveManager::IndexEntry* psyqo::paths::ArchiveManager::getIndexEntry(
+    uint64_t hash) const
+{
     const IndexEntry* first = &m_index[1];
     const IndexEntry* last = first + getIndexCount();
-    const IndexEntry* entry =
-        eastl::lower_bound(first, last, hash, [](const IndexEntry& e, uint64_t hash) { return e.hash < hash; });
+    const IndexEntry* entry = eastl::lower_bound(
+        first, last, hash, [](const IndexEntry& e, uint64_t hash) { return e.hash < hash; });
     if (entry != last && entry->hash == hash) {
         return entry;
     }
     return nullptr;
 }
 
-void psyqo::paths::ArchiveManager::setupQueue(const IndexEntry* entry, CDRom& device,
-                                              eastl::function<void(Buffer<uint8_t>&&)>&& callback) {
+void psyqo::paths::ArchiveManager::setupQueue(const IndexEntry* entry,
+    CDRom& device,
+    eastl::function<void(eastl::vector<uint8_t>&&)>&& callback)
+{
     Kernel::assert(!m_pending, "Only one action can be performed at a time");
     m_queue.reset();
     m_pending = true;
@@ -130,7 +142,8 @@ void psyqo::paths::ArchiveManager::setupQueue(const IndexEntry* entry, CDRom& de
         m_data.resize(sectorCount * 2048);
         m_request.buffer = m_data.data();
     } else {
-        uint32_t actualSize = eastl::max<uint32_t>(((decompSize + 3) & ~3) + 16, sectorCount * 2048);
+        uint32_t actualSize =
+            eastl::max<uint32_t>(((decompSize + 3) & ~3) + 16, sectorCount * 2048);
         m_data.resize(actualSize);
         m_request.buffer = m_data.data() + actualSize - sectorCount * 2048;
     }
@@ -151,12 +164,14 @@ void psyqo::paths::ArchiveManager::setupQueue(const IndexEntry* entry, CDRom& de
         });
 }
 
-void psyqo::paths::ArchiveManager::decompressUCL_NRV2E(const IndexEntry* entry) {
+void psyqo::paths::ArchiveManager::decompressUCL_NRV2E(const IndexEntry* entry)
+{
     uint32_t padding = entry->getPadding();
     n2e_decompress(reinterpret_cast<uint8_t*>(m_request.buffer) + padding, m_data.data());
 }
 
-void psyqo::paths::ArchiveManager::decompressLZ4(const IndexEntry* entry) {
+void psyqo::paths::ArchiveManager::decompressLZ4(const IndexEntry* entry)
+{
     uint32_t padding = entry->getPadding();
     uint32_t srcSize = entry->getCompressedSize() * 2048 - padding;
     uint8_t* src = reinterpret_cast<uint8_t*>(m_request.buffer) + padding;

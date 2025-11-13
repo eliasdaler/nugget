@@ -86,6 +86,18 @@ consteval uint32_t operator""_s(long double value) { return value * 1'000'000; }
  */
 
 class GPU {
+    enum class Layout {
+        Default,
+        VerticalSwitch,
+        Horizontal,
+    };
+#if defined(PSYQO_USE_VERTICAL_SWITCH_LAYOUT)
+    static constexpr Layout c_layout = Layout::VerticalSwitch;
+#elif defined(PSYQO_USE_HORIZONTAL_LAYOUT)
+    static constexpr Layout c_layout = Layout::Horizontal;
+#else
+    static constexpr Layout c_layout = Layout::Default;
+#endif
     struct TimerAwaiter {
         TimerAwaiter(GPU &gpu, uint32_t deadline) : m_gpu(gpu), m_deadline(deadline) {}
         ~TimerAwaiter() {}
@@ -106,6 +118,7 @@ class GPU {
     enum class Interlace { PROGRESSIVE, INTERLACED };
     enum class MiscSetting { CLEAR_VRAM, KEEP_VRAM };
     void initialize(const Configuration &config);
+    void reinitialize(const Configuration &config);
 
     static constexpr uint32_t US_PER_HBLANK = 64;
     static constexpr unsigned c_chainThreshold = 56;
@@ -539,6 +552,7 @@ class GPU {
     void scheduleOTC(uint32_t *start, uint32_t count);
     void checkOTCAndTriggerCallback();
     void prepareForTakeover();
+    void setDisplayArea(bool firstBuffer);
 
     eastl::function<void(void)> m_dmaCallback = nullptr;
     unsigned m_refreshRate = 0;

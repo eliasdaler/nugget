@@ -28,6 +28,7 @@ SOFTWARE.
 #include "psyqo/font.hh"
 #include "psyqo/gpu.hh"
 #include "psyqo/scene.hh"
+#include "psyqo/simplepad.hh"
 
 namespace {
 
@@ -40,17 +41,22 @@ class Hello final : public psyqo::Application {
   public:
     psyqo::Font<> m_systemFont;
     psyqo::Font<> m_romFont;
+    psyqo::SimplePad m_pad;
+    psyqo::GPU::Configuration config;
 };
 
 // And we need at least one scene to be created.
 // This is the one we're going to do for our hello world.
 class HelloScene final : public psyqo::Scene {
+    void start(StartReason reason) override;
     void frame() override;
 
     // We'll have some simple animation going on, so we
     // need to keep track of our state here.
     uint8_t m_anim = 0;
     bool m_direction = true;
+    bool m_hirez = false;
+    bool m_changeRes = false;
 };
 
 // We're instantiating the two objects above right now.
@@ -60,7 +66,6 @@ HelloScene helloScene;
 }  // namespace
 
 void Hello::prepare() {
-    psyqo::GPU::Configuration config;
     config.set(psyqo::GPU::Resolution::W320)
         .set(psyqo::GPU::VideoMode::AUTO)
         .set(psyqo::GPU::ColorMode::C15BITS)
@@ -78,10 +83,31 @@ void Hello::createScene() {
     // font up a bit.
     m_systemFont.uploadSystemFont(gpu());
     m_romFont.uploadKromFont(gpu(), {{.x = 960, .y = int16_t(512 - 48 - 90)}});
+    m_pad.initialize();
     pushScene(&helloScene);
 }
 
+void HelloScene::start(StartReason reason) {
+    // We use the joypad to control the demo and switch video mode, so we need to set up the joypad event handler.
+    hello.m_pad.setOnEvent([this](auto event) {
+        if (event.type != psyqo::SimplePad::Event::ButtonReleased) return;
+        m_changeRes = true;
+    });
+}
+
 void HelloScene::frame() {
+    if (m_changeRes) {
+        m_changeRes = false;
+        m_hirez = !m_hirez;
+        if (m_hirez) {
+            hello.config.set(psyqo::GPU::Resolution::W640);
+            hello.config.set(psyqo::GPU::Interlace::INTERLACED);
+        } else {
+            hello.config.set(psyqo::GPU::Resolution::W320);
+            hello.config.set(psyqo::GPU::Interlace::PROGRESSIVE);
+        }
+        gpu().reinitialize(hello.config);
+    }
     if (m_anim == 0) {
         m_direction = true;
     } else if (m_anim == 255) {

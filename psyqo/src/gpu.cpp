@@ -35,46 +35,49 @@ SOFTWARE.
 #include "common/kernel/events.h"
 #include "common/syscalls/syscalls.h"
 #include "psyqo/hardware/cpu.hh"
+#include "psyqo/hardware/gpu.hh"
 #include "psyqo/kernel.hh"
 
-psyqo::GPU::GPU() {}
+psyqo::GPU::GPU()
+{}
 
-void psyqo::GPU::waitReady() {
+void psyqo::GPU::waitReady()
+{
     while ((Hardware::GPU::Ctrl & uint32_t(0x04000000)) == 0) {
         pumpCallbacks();
     }
 }
 
-void psyqo::GPU::waitFifo() {
+void psyqo::GPU::waitFifo()
+{
     while ((Hardware::GPU::Ctrl & uint32_t(0x02000000)) == 0) {
         pumpCallbacks();
     }
 }
 
-void psyqo::GPU::initialize(const psyqo::GPU::Configuration &config) {
+void psyqo::GPU::reinitialize(const Configuration& config)
+{
+    waitChainIdle();
     // Reset
     Hardware::GPU::Ctrl = 0;
     // FIFO polling mode
     Hardware::GPU::Ctrl = 0x04000001;
     // Display Mode
-    Hardware::GPU::Ctrl = 0x08000000 | (config.config.hResolution << 0) | (config.config.vResolution << 2) |
-                          (config.config.videoMode << 3) | (config.config.colorDepth << 4) |
-                          (config.config.videoInterlace << 5) | (config.config.hResolutionExtended << 6);
+    Hardware::GPU::Ctrl = 0x08000000 | (config.config.hResolution << 0) |
+                          (config.config.vResolution << 2) | (config.config.videoMode << 3) |
+                          (config.config.colorDepth << 4) | (config.config.videoInterlace << 5) |
+                          (config.config.hResolutionExtended << 6);
     // Horizontal Range
     Hardware::GPU::Ctrl = 0x06000000 | 0x260 | (0xc60 << 12);
 
     // Vertical Range
     if (config.config.videoMode == Configuration::VM_NTSC) {
-        Hardware::GPU::Ctrl = 0x07000000 | 16 | (255 << 10);
+        // Hardware::GPU::Ctrl = 0x07000000 | 16 | (255 << 10);
+        // ELIAS DALER FIX: 256, not 255
+        Hardware::GPU::Ctrl = 0x07000000 | 16 | (256 << 10);
     } else {
         Hardware::GPU::Ctrl = 0x07046c2b;
     }
-
-    // Display Area
-    Hardware::GPU::Ctrl = 0x05000000;
-
-    COUNTERS[1].mode = 0x100;
-    COUNTERS[1].value = 0;
 
     if (config.config.videoInterlace == Configuration::VI_ON) {
         m_interlaced = true;
@@ -83,6 +86,8 @@ void psyqo::GPU::initialize(const psyqo::GPU::Configuration &config) {
         m_interlaced = false;
         m_height = 240;
     }
+
+    setDisplayArea(true);
 
     if (config.config.hResolutionExtended == Configuration::HRE_NORMAL) {
         switch (config.config.hResolution) {
@@ -103,11 +108,47 @@ void psyqo::GPU::initialize(const psyqo::GPU::Configuration &config) {
         m_width = 368;
     }
 
+    m_width = 320;
+
     if (config.config.videoMode == Configuration::VM_NTSC) {
         m_refreshRate = 60;
     } else {
         m_refreshRate = 50;
     }
+    // Enable Display
+    Hardware::GPU::Ctrl = 0x03000000;
+}
+
+void psyqo::GPU::setDisplayArea(bool firstBuffer)
+{
+    uint32_t x;
+    uint32_t y;
+
+    if constexpr (c_layout == Layout::Default) {
+        x = 0;
+        y = firstBuffer ? 256 : 0;
+    } else if constexpr (c_layout == Layout::VerticalSwitch) {
+        if (!m_interlaced) {
+            x = 0;
+            y = firstBuffer ? 256 : 16;
+        } else {
+            x = 0;
+            y = 16;
+        }
+    } else if constexpr (c_layout == Layout::Horizontal) {
+        x = firstBuffer ? 0 : m_width;
+        y = 0;
+    }
+
+    Hardware::GPU::Ctrl = 0x05000000 | (x << 0) | (y << 10);
+}
+
+void psyqo::GPU::initialize(const Configuration& config)
+{
+    COUNTERS[1].mode = 0x100;
+    COUNTERS[1].value = 0;
+
+    reinitialize(config);
 
     // Install VBlank interrupt handler
     if (Kernel::isKernelTakenOver()) {
@@ -130,15 +171,14 @@ void psyqo::GPU::initialize(const psyqo::GPU::Configuration &config) {
         ff.rect = Rect{0, 0, 1024, 512};
         sendPrimitive(ff);
     }
-    // Enable Display
-    Hardware::GPU::Ctrl = 0x03000000;
     Kernel::enableDma(Kernel::DMA::GPU);
     Kernel::enableDma(Kernel::DMA::OTC);
     Kernel::registerDmaEvent(Kernel::DMA::GPU, [this]() {
         eastl::atomic_signal_fence(eastl::memory_order_acquire);
         uint32_t mode = (DMA_CTRL[DMA_GPU].CHCR & 0x00000600) >> 9;
         switch (mode) {
-            case 1: {  // was a normal DMA
+            case 1:
+            { // was a normal DMA
                 auto chainNext = m_chainNext;
                 if (!chainNext) break;
                 // We just processed a block which was too big, so now we need to send the next one
@@ -148,7 +188,8 @@ void psyqo::GPU::initialize(const psyqo::GPU::Configuration &config) {
                 if (count > (c_chainThreshold / 4)) {
                     // next one still too big
                     head &= 0xffffff;
-                    m_chainNext = head == 0xffffff ? nullptr : reinterpret_cast<uint32_t *>(head & 0x7fffff);
+                    m_chainNext =
+                        head == 0xffffff ? nullptr : reinterpret_cast<uint32_t*>(head & 0x7fffff);
                     scheduleNormalDMA(reinterpret_cast<uintptr_t>(chainNext) + 4, count);
                 } else {
                     // next one is small enough
@@ -157,19 +198,20 @@ void psyqo::GPU::initialize(const psyqo::GPU::Configuration &config) {
                 }
                 return;
             }
-            case 2: {  // was a linked DMA
+            case 2:
+            { // was a linked DMA
                 uint32_t madr = DMA_CTRL[DMA_GPU].MADR;
                 if (madr != 0xffffff) {
                     madr &= 0x7fffff;
                     // Did we get interrupted in the middle of a chain?
                     // It means we linked a node too big for the DMA engine to handle,
                     // so we need to send it manually
-                    uint32_t *next = reinterpret_cast<uint32_t *>(madr | 0x80000000);
+                    uint32_t* next = reinterpret_cast<uint32_t*>(madr | 0x80000000);
                     uint32_t head = *next;
                     uint32_t count = head >> 24;
                     head &= 0xffffff;
                     if (head != 0xffffff) {
-                        m_chainNext = reinterpret_cast<uint32_t *>(head & 0x7fffff);
+                        m_chainNext = reinterpret_cast<uint32_t*>(head & 0x7fffff);
                     }
                     scheduleNormalDMA(madr + 4, count);
                     return;
@@ -193,10 +235,11 @@ void psyqo::GPU::initialize(const psyqo::GPU::Configuration &config) {
     Hardware::CPU::DICR = dicr;
 }
 
-void psyqo::GPU::checkOTCAndTriggerCallback() {
-    auto &OTCs = m_OTCs[m_parity ^ 1];
+void psyqo::GPU::checkOTCAndTriggerCallback()
+{
+    auto& OTCs = m_OTCs[m_parity ^ 1];
     if (!OTCs.empty()) {
-        auto &otc = OTCs.front();
+        auto& otc = OTCs.front();
         DMA_CTRL[DMA_GPUOTC].MADR = uint32_t(otc.start);
         DMA_CTRL[DMA_GPUOTC].BCR = otc.count;
         OTCs.pop_front();
@@ -213,7 +256,8 @@ void psyqo::GPU::checkOTCAndTriggerCallback() {
     }
 }
 
-void psyqo::GPU::flip() {
+void psyqo::GPU::flip()
+{
     do {
         pumpCallbacks();
         eastl::atomic_signal_fence(eastl::memory_order_acquire);
@@ -222,13 +266,8 @@ void psyqo::GPU::flip() {
     auto parity = m_parity;
     parity ^= 1;
     if (!m_interlaced) {
-        bool firstBuffer = !parity;
-        // Set Display Area
-        if (firstBuffer) {
-            Hardware::GPU::Ctrl = 0x05000000 | (256 << 10);
-        } else {
-            Hardware::GPU::Ctrl = 0x05000000;
-        }
+        bool firstBuffer = !parity || m_interlaced;
+        setDisplayArea(firstBuffer);
     } else if (!pcsx_present()) {
         while (1) {
             uint32_t stat = Hardware::GPU::Ctrl;
@@ -259,66 +298,171 @@ void psyqo::GPU::flip() {
     }
 }
 
-void psyqo::GPU::disableScissor() {
+void psyqo::GPU::disableScissor()
+{
     Prim::Scissor s;
     sendPrimitive(s);
 }
 
-void psyqo::GPU::enableScissor() {
+void psyqo::GPU::enableScissor()
+{
     Prim::Scissor s;
     getScissor(s);
     sendPrimitive(s);
 }
 
-void psyqo::GPU::getScissor(Prim::Scissor &scissor) {
+void psyqo::GPU::getScissor(Prim::Scissor& scissor)
+{
     auto parity = m_parity;
     int16_t width = m_width;
     int16_t height = m_height;
     bool firstBuffer = !parity || m_interlaced;
 
-    scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = firstBuffer ? int16_t(0) : int16_t(256)}});
-    scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = firstBuffer ? height : int16_t(256 + height)}});
-    scissor.offset = Prim::DrawingOffset(Vertex{{.x = int16_t(0), .y = firstBuffer ? int16_t(0) : int16_t(256)}});
+    if constexpr (c_layout == Layout::Default) {
+        if (firstBuffer) {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 0}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = height}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 0}});
+        } else {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 256}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = int16_t(256 + height)}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 256}});
+        }
+    } else if constexpr (c_layout == Layout::VerticalSwitch) {
+        if (firstBuffer) {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 16}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = int16_t(16 + height)}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 16}});
+        } else {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 256}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = int16_t(256 + height)}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 256}});
+        }
+    } else if constexpr (c_layout == Layout::Horizontal) {
+        if (firstBuffer) {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 0}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = height}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 0}});
+        } else {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = width, .y = 0}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = int16_t(width * 2), .y = height}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = width, .y = 0}});
+        }
+    }
 }
 
-void psyqo::GPU::getNextScissor(Prim::Scissor &scissor) {
+void psyqo::GPU::getNextScissor(Prim::Scissor& scissor)
+{
     auto parity = m_parity;
     int16_t width = m_width;
     int16_t height = m_height;
     bool firstBuffer = !parity || m_interlaced;
 
-    scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = firstBuffer ? int16_t(256) : int16_t(0)}});
-    scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = firstBuffer ? int16_t(256 + height) : height}});
-    scissor.offset = Prim::DrawingOffset(Vertex{{.x = int16_t(0), .y = firstBuffer ? int16_t(256) : int16_t(0)}});
+    if constexpr (c_layout == Layout::Default) {
+        if (!firstBuffer) {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 0}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = height}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 0}});
+        } else {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 256}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = int16_t(256 + height)}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 256}});
+        }
+    } else if constexpr (c_layout == Layout::VerticalSwitch) {
+        if (!firstBuffer) {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 16}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = int16_t(16 + height)}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 16}});
+        } else {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 256}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = int16_t(256 + height)}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 256}});
+        }
+    } else if constexpr (c_layout == Layout::Horizontal) {
+        if (!firstBuffer) {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = 0, .y = 0}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = width, .y = height}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = 0, .y = 0}});
+        } else {
+            scissor.start = Prim::DrawingAreaStart(Vertex{{.x = width, .y = 0}});
+            scissor.end = Prim::DrawingAreaEnd(Vertex{{.x = int16_t(width * 2), .y = height}});
+            scissor.offset = Prim::DrawingOffset(Vertex{{.x = width, .y = 0}});
+        }
+    }
 }
 
-void psyqo::GPU::clear(Color bg) {
+void psyqo::GPU::clear(Color bg)
+{
     Prim::FastFill ff;
     getClear(ff, bg);
     sendPrimitive(ff);
 }
 
-void psyqo::GPU::getClear(Prim::FastFill &ff, Color bg) const {
+void psyqo::GPU::getClear(Prim::FastFill& ff, Color bg) const
+{
     int16_t width = m_width;
     int16_t height = m_height;
     bool firstBuffer = !m_parity || m_interlaced;
     ff.setColor(bg);
-    ff.rect = Rect{0, firstBuffer ? int16_t(0) : int16_t(256), width, height};
+    if constexpr (c_layout == Layout::Default) {
+        if (firstBuffer) {
+            ff.rect = Rect{0, 0, width, height};
+        } else {
+            ff.rect = Rect{0, 256, width, height};
+        }
+    } else if constexpr (c_layout == Layout::VerticalSwitch) {
+        if (firstBuffer) {
+            ff.rect = Rect{0, 16, width, height};
+        } else {
+            ff.rect = Rect{0, 256, width, height};
+        }
+    } else if constexpr (c_layout == Layout::Horizontal) {
+        if (firstBuffer) {
+            ff.rect = Rect{0, 0, width, height};
+        } else {
+            ff.rect = Rect{width, 0, width, height};
+        }
+    }
 }
 
-void psyqo::GPU::getNextClear(Prim::FastFill &ff, Color bg) const {
+void psyqo::GPU::getNextClear(Prim::FastFill& ff, Color bg) const
+{
     int16_t width = m_width;
     int16_t height = m_height;
     bool firstBuffer = !m_parity || m_interlaced;
     ff.setColor(bg);
-    ff.rect = Rect{0, firstBuffer ? int16_t(256) : int16_t(0), width, height};
+    if constexpr (c_layout == Layout::Default) {
+        if (firstBuffer) {
+            ff.rect = Rect{0, 0, width, height};
+        } else {
+            ff.rect = Rect{0, 256, width, height};
+        }
+    } else if constexpr (c_layout == Layout::VerticalSwitch) {
+        if (m_interlaced) {
+            ff.rect = Rect{0, 16, width, height};
+        } else {
+            if (firstBuffer) {
+                ff.rect = Rect{0, 256, width, height};
+            } else {
+                ff.rect = Rect{0, 16, width, height};
+            }
+        }
+    } else if constexpr (c_layout == Layout::Horizontal) {
+        if (firstBuffer) {
+            ff.rect = Rect{0, 0, width, height};
+        } else {
+            ff.rect = Rect{width, 0, width, height};
+        }
+    }
 }
 
-void psyqo::GPU::uploadToVRAM(const uint16_t *data, Rect rect) {
+void psyqo::GPU::uploadToVRAM(const uint16_t* data, Rect rect)
+{
     if (rect.isEmpty()) return;
     bool done = false;
     uploadToVRAM(
-        data, rect,
+        data,
+        rect,
         [&done]() {
             done = true;
             eastl::atomic_signal_fence(eastl::memory_order_release);
@@ -330,10 +474,14 @@ void psyqo::GPU::uploadToVRAM(const uint16_t *data, Rect rect) {
     }
 }
 
-void psyqo::GPU::uploadToVRAM(const uint16_t *data, Rect region, eastl::function<void()> &&callback,
-                              DMA::DmaCallback dmaCallback) {
+void psyqo::GPU::uploadToVRAM(const uint16_t* data,
+    Rect region,
+    eastl::function<void()>&& callback,
+    DMA::DmaCallback dmaCallback)
+{
     if (region.isEmpty()) {
-        Kernel::assert(dmaCallback == DMA::FROM_MAIN_LOOP, "Empty DMA transfer with ISR callback aren't supported");
+        Kernel::assert(dmaCallback == DMA::FROM_MAIN_LOOP,
+            "Empty DMA transfer with ISR callback aren't supported");
         Kernel::queueCallback(eastl::move(callback));
         return;
     }
@@ -364,18 +512,21 @@ void psyqo::GPU::uploadToVRAM(const uint16_t *data, Rect region, eastl::function
 
     // Activating VRAM DMA upload mode
     Hardware::GPU::Ctrl = 0x04000002;
-    while ((Hardware::GPU::Ctrl & uint32_t(0x10000000)) == 0);
+    while ((Hardware::GPU::Ctrl & uint32_t(0x10000000)) == 0)
+        ;
     DMA_CTRL[DMA_GPU].MADR = ptr;
     DMA_CTRL[DMA_GPU].BCR = bcr;
     eastl::atomic_signal_fence(eastl::memory_order_release);
     DMA_CTRL[DMA_GPU].CHCR = 0x01000201;
 }
 
-void psyqo::GPU::sendFragment(const uint32_t *data, size_t count) {
+void psyqo::GPU::sendFragment(const uint32_t* data, size_t count)
+{
     bool done = false;
     if (count == 0) return;
     sendFragment(
-        data, count,
+        data,
+        count,
         [&done]() {
             done = true;
             eastl::atomic_signal_fence(eastl::memory_order_release);
@@ -387,10 +538,14 @@ void psyqo::GPU::sendFragment(const uint32_t *data, size_t count) {
     }
 }
 
-void psyqo::GPU::sendFragment(const uint32_t *data, size_t count, eastl::function<void()> &&callback,
-                              DMA::DmaCallback dmaCallback) {
+void psyqo::GPU::sendFragment(const uint32_t* data,
+    size_t count,
+    eastl::function<void()>&& callback,
+    DMA::DmaCallback dmaCallback)
+{
     if (count == 0) {
-        Kernel::assert(dmaCallback == DMA::FROM_MAIN_LOOP, "Empty DMA transfer with ISR callback aren't supported");
+        Kernel::assert(dmaCallback == DMA::FROM_MAIN_LOOP,
+            "Empty DMA transfer with ISR callback aren't supported");
         Kernel::queueCallback(eastl::move(callback));
         return;
     }
@@ -402,7 +557,8 @@ void psyqo::GPU::sendFragment(const uint32_t *data, size_t count, eastl::functio
     scheduleNormalDMA(ptr, count);
 }
 
-void psyqo::GPU::scheduleNormalDMA(uintptr_t data, size_t count) {
+void psyqo::GPU::scheduleNormalDMA(uintptr_t data, size_t count)
+{
     uint32_t bcr = count;
 
     Kernel::assert((DMA_CTRL[DMA_GPU].CHCR & 0x01000000) == 0, "GPU DMA busy");
@@ -415,14 +571,16 @@ void psyqo::GPU::scheduleNormalDMA(uintptr_t data, size_t count) {
     bcr <<= 16;
     bcr |= bs;
 
-    while ((Hardware::GPU::Ctrl & uint32_t(0x10000000)) == 0);
+    while ((Hardware::GPU::Ctrl & uint32_t(0x10000000)) == 0)
+        ;
     DMA_CTRL[DMA_GPU].MADR = data;
     DMA_CTRL[DMA_GPU].BCR = bcr;
     eastl::atomic_signal_fence(eastl::memory_order_release);
     DMA_CTRL[DMA_GPU].CHCR = 0x01000201;
 }
 
-void psyqo::GPU::chain(uint32_t *first, uint32_t *last, size_t count) {
+void psyqo::GPU::chain(uint32_t* first, uint32_t* last, size_t count)
+{
     Kernel::assert(count < 256, "Fragment too big to be chained");
     if (!m_chainHead) {
         m_chainHead = first;
@@ -437,7 +595,8 @@ void psyqo::GPU::chain(uint32_t *first, uint32_t *last, size_t count) {
     m_chainTailCount = count << 24;
 }
 
-void psyqo::GPU::sendChain() {
+void psyqo::GPU::sendChain()
+{
     bool done = false;
     sendChain(
         [&done]() {
@@ -451,7 +610,8 @@ void psyqo::GPU::sendChain() {
     }
 }
 
-void psyqo::GPU::sendChain(eastl::function<void()> &&callback, DMA::DmaCallback dmaCallback) {
+void psyqo::GPU::sendChain(eastl::function<void()>&& callback, DMA::DmaCallback dmaCallback)
+{
     auto chainHead = m_chainHead;
     uintptr_t ptr = reinterpret_cast<uintptr_t>(chainHead);
     *m_chainTail = m_chainTailCount | 0xffffff;
@@ -464,16 +624,18 @@ void psyqo::GPU::sendChain(eastl::function<void()> &&callback, DMA::DmaCallback 
     uint32_t count = head >> 24;
     head &= 0xffffff;
     if (count > (c_chainThreshold / 4)) {
-        m_chainNext = head == 0xffffff ? nullptr : reinterpret_cast<uint32_t *>(head & 0x7fffff);
+        m_chainNext = head == 0xffffff ? nullptr : reinterpret_cast<uint32_t*>(head & 0x7fffff);
         scheduleNormalDMA(ptr + 4, count);
     } else {
         scheduleChainedDMA(ptr);
     }
 }
 
-void psyqo::GPU::scheduleChainedDMA(uintptr_t head) {
+void psyqo::GPU::scheduleChainedDMA(uintptr_t head)
+{
     Kernel::assert((DMA_CTRL[DMA_GPU].CHCR & 0x01000000) == 0, "GPU DMA busy");
-    while ((Hardware::GPU::Ctrl & uint32_t(0x10000000)) == 0);
+    while ((Hardware::GPU::Ctrl & uint32_t(0x10000000)) == 0)
+        ;
     // Using block command mode, probably?
     Hardware::GPU::Ctrl = 0x04000002;
     DMA_CTRL[DMA_GPU].MADR = head;
@@ -481,33 +643,40 @@ void psyqo::GPU::scheduleChainedDMA(uintptr_t head) {
     DMA_CTRL[DMA_GPU].CHCR = 0x01000401;
 }
 
-bool psyqo::GPU::isChainIdle() const {
+bool psyqo::GPU::isChainIdle() const
+{
     eastl::atomic_signal_fence(eastl::memory_order_acquire);
     return m_chainStatus == CHAIN_IDLE;
 }
 
-bool psyqo::GPU::isChainTransferring() const {
+bool psyqo::GPU::isChainTransferring() const
+{
     eastl::atomic_signal_fence(eastl::memory_order_acquire);
     return m_chainStatus == CHAIN_TRANSFERRING;
 }
 
-bool psyqo::GPU::isChainTransferred() const {
+bool psyqo::GPU::isChainTransferred() const
+{
     eastl::atomic_signal_fence(eastl::memory_order_acquire);
     return m_chainStatus == CHAIN_TRANSFERRED;
 }
 
-uintptr_t psyqo::GPU::armTimer(uint32_t deadline, eastl::function<void(uint32_t)> &&callback) {
+uintptr_t psyqo::GPU::armTimer(uint32_t deadline, eastl::function<void(uint32_t)>&& callback)
+{
     m_timers.emplace_back(eastl::move(callback), deadline, 0, 0, false);
     return reinterpret_cast<uintptr_t>(&m_timers.back());
 }
 
-uintptr_t psyqo::GPU::armPeriodicTimer(uint32_t interval, eastl::function<void(uint32_t)> &&callback) {
+uintptr_t psyqo::GPU::armPeriodicTimer(uint32_t interval,
+    eastl::function<void(uint32_t)>&& callback)
+{
     m_timers.emplace_back(eastl::move(callback), m_currentTime + interval, interval, 0, true);
     return reinterpret_cast<uintptr_t>(&m_timers.back());
 }
 
-void psyqo::GPU::changeTimerPeriod(uintptr_t id, uint32_t period, bool reset) {
-    for (auto &timer : m_timers) {
+void psyqo::GPU::changeTimerPeriod(uintptr_t id, uint32_t period, bool reset)
+{
+    for (auto& timer : m_timers) {
         if (reinterpret_cast<uintptr_t>(&timer) != id) continue;
         if (timer.period == period) continue;
         if (!timer.periodic) continue;
@@ -522,8 +691,9 @@ void psyqo::GPU::changeTimerPeriod(uintptr_t id, uint32_t period, bool reset) {
     }
 }
 
-void psyqo::GPU::pauseTimer(uintptr_t id) {
-    for (auto &timer : m_timers) {
+void psyqo::GPU::pauseTimer(uintptr_t id)
+{
+    for (auto& timer : m_timers) {
         if (reinterpret_cast<uintptr_t>(&timer) != id) continue;
         if (timer.paused) return;
         timer.paused = true;
@@ -532,8 +702,9 @@ void psyqo::GPU::pauseTimer(uintptr_t id) {
     }
 }
 
-void psyqo::GPU::resumeTimer(uintptr_t id) {
-    for (auto &timer : m_timers) {
+void psyqo::GPU::resumeTimer(uintptr_t id)
+{
+    for (auto& timer : m_timers) {
         if (reinterpret_cast<uintptr_t>(&timer) != id) continue;
         if (!timer.paused) return;
         timer.paused = false;
@@ -542,7 +713,8 @@ void psyqo::GPU::resumeTimer(uintptr_t id) {
     }
 }
 
-void psyqo::GPU::cancelTimer(uintptr_t id) {
+void psyqo::GPU::cancelTimer(uintptr_t id)
+{
     for (auto it = m_timers.begin(); it != m_timers.end(); ++it) {
         if (reinterpret_cast<uintptr_t>(&*it) != id) continue;
         m_timers.erase(it);
@@ -550,18 +722,20 @@ void psyqo::GPU::cancelTimer(uintptr_t id) {
     }
 }
 
-void psyqo::GPU::pumpCallbacks() {
+void psyqo::GPU::pumpCallbacks()
+{
     uint32_t lastHSyncCounter = m_lastHSyncCounter;
     uint32_t hsyncCounter = COUNTERS[1].value;
     if (hsyncCounter < lastHSyncCounter) {
         hsyncCounter += 0x10000;
     }
-    uint32_t currentTime = m_currentTime = m_currentTime + (hsyncCounter - lastHSyncCounter) * US_PER_HBLANK;
+    uint32_t currentTime = m_currentTime =
+        m_currentTime + (hsyncCounter - lastHSyncCounter) * US_PER_HBLANK;
     bool done = false;
     while (!done) {
         done = true;
         for (auto it = m_timers.begin(); it != m_timers.end(); it++) {
-            auto &timer = *it;
+            auto& timer = *it;
             if (timer.paused) continue;
             if ((int32_t)(timer.deadline - currentTime) <= 0) {
                 if (timer.periodic) {
@@ -579,11 +753,15 @@ void psyqo::GPU::pumpCallbacks() {
     m_lastHSyncCounter = hsyncCounter;
 }
 
-void psyqo::GPU::scheduleOTC(uint32_t *start, uint32_t count) { m_OTCs[m_parity].emplace_back(start, count); }
+void psyqo::GPU::scheduleOTC(uint32_t* start, uint32_t count)
+{
+    m_OTCs[m_parity].emplace_back(start, count);
+}
 
 extern uint16_t psyqoExceptionHandlerAdjustFrameCount[];
 
-void psyqo::GPU::prepareForTakeover() {
+void psyqo::GPU::prepareForTakeover()
+{
     uintptr_t frameCountPtr = reinterpret_cast<uintptr_t>(&m_frameCount);
     uint16_t hi = frameCountPtr >> 16;
     uint16_t lo = frameCountPtr & 0xffff;

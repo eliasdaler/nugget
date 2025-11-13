@@ -662,3 +662,4 @@ void _ZdaPvj(void *ptr, unsigned int size) { psyqo_free(ptr); }
 
 void *psyqo_heap_start() { return bottom; }
 void *psyqo_heap_end() { return maximum_heap_end; }
+
