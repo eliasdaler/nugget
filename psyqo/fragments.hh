@@ -79,7 +79,7 @@ struct ChainEntryPC {
         next = nullptr;
         size = 0;
     }
-    void set(ChainEntry * next_, unsigned size_) {
+    void set(ChainEntry* next_, unsigned size_) {
         next = next_;
         size = size_;
     }
@@ -90,8 +90,8 @@ struct ChainEntryPS1 {
     void setEndMarker() {
         head = 0xffffff;
     }
-    void set(ChainEntry * next, unsigned size) {
-        head = size << 24 | (reinterpret_cast<uintptr_t>(next) & 0xffffff);
+    void set(ChainEntryPS1* next, unsigned size) {
+        head = (size << 24) | (reinterpret_cast<uintptr_t>(next->head) & 0xffffff);
     }
 };
 

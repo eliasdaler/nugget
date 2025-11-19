@@ -367,8 +367,8 @@ class GPU {
      */
     template <size_t N, Safe safety = Safe::Yes>
     void chain(OrderingTable<N, safety> &table) {
-        chain(&table.m_table[N], &table.m_table[0], 0);
-        scheduleOTC(&table.m_table[N], N + 1);
+        chain(&table.m_table[N].head, &table.m_table[0].head, 0);
+        scheduleOTC(&table.m_table[N].head, N + 1);
     }
 
     /**
