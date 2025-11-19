@@ -85,19 +85,14 @@ class OrderingTable : public OrderingTableBase {
     template <Fragment Frag>
     void insert(Frag& frag, int32_t z) {
         // TODO: cater for big packets
-#ifdef PS1_PC_PORT
         auto* table = m_table + 1;
         if constexpr (safety == Safe::Yes) {
             z = eastl::clamp(z, int32_t(0), int32_t(N - 1));
         }
-        frag.set(&table[z], frag.getActualFragmentSize());
+#ifdef PS1_PC_PORT
+        frag.set(table[z].next, frag.getActualFragmentSize());
         table[z].set(&frag, 0);
 #else
-        auto* table = m_table + 1;
-        if constexpr (safety == Safe::Yes) {
-            z = eastl::clamp(z, int32_t(0), int32_t(N - 1));
-        }
-        // *head = (frag.getActualFragmentSize() << 24) | table[z].head;
         frag.set(&table[z], frag.getActualFragmentSize());
         table[z].head = reinterpret_cast<uint32_t>(&frag) & 0xffffff;
 #endif
