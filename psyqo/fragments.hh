@@ -91,7 +91,7 @@ struct ChainEntryPS1 {
         head = 0xffffff;
     }
     void set(ChainEntryPS1* next, unsigned size) {
-        head = (size << 24) | (reinterpret_cast<uintptr_t>(next->head) & 0xffffff);
+        head = (size << 24) | (next->head & 0xffffff);
     }
 };
 

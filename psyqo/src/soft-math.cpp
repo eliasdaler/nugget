@@ -26,6 +26,8 @@ SOFTWARE.
 
 #include "psyqo/soft-math.hh"
 
+#include <utility>
+
 using namespace psyqo::fixed_point_literals;
 using namespace psyqo::trig_literals;
 
@@ -125,7 +127,7 @@ psyqo::Matrix33 psyqo::SoftMath::generateRotationMatrix33(Angle t, Axis a, const
                              }}};
         } break;
     }
-    __builtin_unreachable();
+    std::unreachable();
 }
 
 void psyqo::SoftMath::multiplyMatrix33(const Matrix33 &m1, const Matrix33 &m2, Matrix33 *out) {

@@ -65,7 +65,14 @@ struct SPUVoice {
 #define SPU_VOL_EXT_LEFT HW_U16(0x1f801db4)
 #define SPU_VOL_EXT_RIGHT HW_U16(0x1f801db6)
 
-static __inline__ void muteSpu() {
+#ifdef __cplusplus
+#define NUGGET_INLINE inline
+#else
+#define NUGGET_INLINE __inline__
+#endif
+
+static NUGGET_INLINE void muteSpu()
+{
     SPU_REVERB_RIGHT = 0;
     SPU_REVERB_LEFT = 0;
     SPU_VOL_MAIN_RIGHT = 0;
