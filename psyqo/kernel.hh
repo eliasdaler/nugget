@@ -30,6 +30,7 @@ SOFTWARE.
 #include <stdint.h>
 
 #include <source_location>
+#include <utility>
 
 namespace psyqo {
 

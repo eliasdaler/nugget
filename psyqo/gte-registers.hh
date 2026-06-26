@@ -414,6 +414,8 @@ static inline PackedVec3 readSafe() {
 #ifndef PS1_PC_PORT
     static_assert(valid, "Unable to read pseudo register as vector");
     __builtin_unreachable();
+#else
+    return {};
 #endif
 }
 
@@ -429,6 +431,8 @@ static inline PackedVec3 readUnsafe() {
 #ifndef PS1_PC_PORT
     static_assert(valid, "Unable to read pseudo register as vector");
     __builtin_unreachable();
+#else
+    return {};
 #endif
 }
 
