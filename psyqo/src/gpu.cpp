@@ -138,6 +138,11 @@ void psyqo::GPU::setDisplayArea(bool firstBuffer)
         y = 0;
     }
 
+    if (m_interlaced) {
+        x = 0;
+        y = 0;
+    }
+
     Hardware::GPU::Ctrl = 0x05000000 | (x << 0) | (y << 10);
 }
 
