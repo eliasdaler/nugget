@@ -1,8 +1,8 @@
-TARGET = cdda
+TARGET = memorycard
 TYPE = ps-exe
 
 SRCS = \
-cdda.cpp \
+memorycard.cpp \
 
 ifeq ($(TEST),true)
 CPPFLAGS = -Werror

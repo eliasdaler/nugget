@@ -108,8 +108,6 @@ void psyqo::GPU::reinitialize(const Configuration& config)
         m_width = 368;
     }
 
-    m_width = 320;
-
     if (config.config.videoMode == Configuration::VM_NTSC) {
         m_refreshRate = 60;
     } else {

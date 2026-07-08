@@ -1,5 +1,5 @@
 -m32
--std=c++20
+-std=c++2b
 -fcoroutines-ts
 -I.
 -I..

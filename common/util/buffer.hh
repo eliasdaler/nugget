@@ -28,8 +28,6 @@ SOFTWARE.
 
 #include "common/util/bitfield.hh"
 
-#include "common/syscalls/syscalls.h"
-
 namespace Utilities {
 
 /**
@@ -90,7 +88,6 @@ class Buffer {
         other.m_size.clear();
     }
     ~Buffer() {
-        // ramsyscall_printf("~Buffer(): %p\n", this);
         if (!m_size.get<IsExternalField>()) {
             Allocator::deallocate(m_data);
         }
@@ -133,13 +130,9 @@ class Buffer {
 
     void resize(size_t size) {
         if (!m_size.get<IsExternalField>()) {
-            if (size > m_size.get<SizeField>()) {
-                m_data = Allocator::template reallocate<T>(m_data, size);
-            }
+            m_data = Allocator::template reallocate<T>(m_data, size);
         }
-        if (size > m_size.get<SizeField>()) {
-            m_size.set<SizeField>(size);
-        }
+        m_size.set<SizeField>(size);
     }
 
     T* data() { return m_data; }

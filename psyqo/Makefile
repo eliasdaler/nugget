@@ -18,7 +18,7 @@ $(wildcard src/*.c) \
 $(wildcard src/*.s) \
 
 CPPFLAGS = -I../third_party/EASTL/include -I../third_party/EABase/include/Common
-CXXFLAGS = -std=c++20
+CXXFLAGS = -std=c++2b
 
 ifeq ($(TEST),true)
 CPPFLAGS += -Werror
