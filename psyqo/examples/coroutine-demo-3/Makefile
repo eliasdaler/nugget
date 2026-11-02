@@ -7,6 +7,6 @@ coroutine-demo-3.cpp \
 ifeq ($(TEST),true)
 CPPFLAGS = -Werror
 endif
-CXXFLAGS = -std=c++20 -fcoroutines
+CXXFLAGS = -std=c++2b -fcoroutines
 
 include ../../psyqo.mk

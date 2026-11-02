@@ -338,7 +338,7 @@ class GPU {
      */
     template <Fragment Frag>
     void chain(Frag &fragment) {
-        chain(&fragment.head, &fragment.head, fragment.getActualFragmentSize());
+        chain(reinterpret_cast<uint32_t*>(&fragment.head), reinterpret_cast<uint32_t*>(&fragment.head), fragment.getActualFragmentSize());
     }
 
     /**
@@ -354,7 +354,7 @@ class GPU {
     void chain(Frag1 *first, Frag2 *last) {
         auto count = last->getActualFragmentSize();
         Kernel::assert(count <= (c_chainThreshold / 4), "Last element of the chain is too big");
-        chain(&first->head, &last->head, last->getActualFragmentSize());
+        chain(reinterpret_cast<uint32_t*>(&first->head), reinterpret_cast<uint32_t*>(&last->head), last->getActualFragmentSize());
     }
 
     /**
@@ -367,8 +367,8 @@ class GPU {
      */
     template <size_t N, Safe safety = Safe::Yes>
     void chain(OrderingTable<N, safety> &table) {
-        chain(&table.m_table[N].head, &table.m_table[0].head, 0);
-        scheduleOTC(&table.m_table[N].head, N + 1);
+        chain(reinterpret_cast<uint32_t*>(&table.m_table[N].head), reinterpret_cast<uint32_t*>(&table.m_table[0].head), 0);
+        scheduleOTC(reinterpret_cast<uint32_t*>(&table.m_table[N].head), N + 1);
     }
 
     /**
