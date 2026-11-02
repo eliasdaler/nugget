@@ -508,7 +508,7 @@ namespace eastl
 		return !(lhs < rhs);
 	}
 
-	// string_view / wstring_view 
+	// string_view / wstring_view
 	typedef basic_string_view<char>    string_view;
 	typedef basic_string_view<wchar_t> wstring_view;
 
@@ -604,21 +604,21 @@ namespace eastl
 	    {
 		    inline namespace string_view_literals
 		    {
-			    EA_CONSTEXPR inline string_view operator "" sv(const char* str, size_t len) EA_NOEXCEPT { return {str, len}; }
-			    EA_CONSTEXPR inline u16string_view operator "" sv(const char16_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
-			    EA_CONSTEXPR inline u32string_view operator "" sv(const char32_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
-			    EA_CONSTEXPR inline wstring_view operator "" sv(const wchar_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline string_view operator ""sv(const char* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline u16string_view operator ""sv(const char16_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline u32string_view operator ""sv(const char32_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline wstring_view operator ""sv(const wchar_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
 
 				// Backwards compatibility.
-			    EA_CONSTEXPR inline string_view operator "" _sv(const char* str, size_t len) EA_NOEXCEPT { return {str, len}; }
-			    EA_CONSTEXPR inline u16string_view operator "" _sv(const char16_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
-			    EA_CONSTEXPR inline u32string_view operator "" _sv(const char32_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
-			    EA_CONSTEXPR inline wstring_view operator "" _sv(const wchar_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline string_view operator ""_sv(const char* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline u16string_view operator ""_sv(const char16_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline u32string_view operator ""_sv(const char32_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+			    EA_CONSTEXPR inline wstring_view operator ""_sv(const wchar_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
 
 				// C++20 char8_t support.
 				#if EA_CHAR8_UNIQUE
-					EA_CONSTEXPR inline u8string_view operator "" sv(const char8_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
-					EA_CONSTEXPR inline u8string_view operator "" _sv(const char8_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+					EA_CONSTEXPR inline u8string_view operator ""sv(const char8_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
+					EA_CONSTEXPR inline u8string_view operator ""_sv(const char8_t* str, size_t len) EA_NOEXCEPT { return {str, len}; }
 				#endif
 		    }
 	    }
