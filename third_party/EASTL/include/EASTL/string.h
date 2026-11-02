@@ -4055,14 +4055,14 @@ namespace eastl
 	    {
 		    inline namespace string_literals
 		    {
-				inline string operator"" s(const char* str, size_t len) EA_NOEXCEPT { return {str, string::size_type(len)}; }
-				inline u16string operator"" s(const char16_t* str, size_t len) EA_NOEXCEPT { return {str, u16string::size_type(len)}; }
-				inline u32string operator"" s(const char32_t* str, size_t len) EA_NOEXCEPT { return {str, u32string::size_type(len)}; }
-				inline wstring operator"" s(const wchar_t* str, size_t len) EA_NOEXCEPT { return {str, wstring::size_type(len)}; }
+				inline string operator""s(const char* str, size_t len) EA_NOEXCEPT { return {str, string::size_type(len)}; }
+				inline u16string operator""s(const char16_t* str, size_t len) EA_NOEXCEPT { return {str, u16string::size_type(len)}; }
+				inline u32string operator""s(const char32_t* str, size_t len) EA_NOEXCEPT { return {str, u32string::size_type(len)}; }
+				inline wstring operator""s(const wchar_t* str, size_t len) EA_NOEXCEPT { return {str, wstring::size_type(len)}; }
 
 				// C++20 char8_t support.
 				#if EA_CHAR8_UNIQUE
-					inline u8string operator"" s(const char8_t* str, size_t len) EA_NOEXCEPT { return {str, u8string::size_type(len)}; }
+					inline u8string operator""s(const char8_t* str, size_t len) EA_NOEXCEPT { return {str, u8string::size_type(len)}; }
 				#endif
 		    }
 	    }
